@@ -28,7 +28,8 @@ test.describe('local mock trademark appeal form', () => {
 
     const retry = await page.evaluate(() => window.MockAppeal.fill(false));
     expect(retry.report.blockedReason).toBeNull();
-    expect(retry.report.filled + retry.report.skipped).toBeGreaterThan(0);
+    expect(retry.report.filled + retry.report.alreadyCorrect + retry.report.skipped).toBeGreaterThan(0);
+    expect(retry.report.alreadyCorrect).toBeGreaterThan(0);
     await expect(page.locator('#full-name')).toHaveValue('Alex Example');
     expect(await page.evaluate(() => window.__appealSubmitted)).toBeFalsy();
   });

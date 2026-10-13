@@ -62,6 +62,7 @@ export function runAutofill(
       detection,
       report: {
         filled: 0,
+        alreadyCorrect: 0,
         skipped: 0,
         failed: 0,
         results: [],

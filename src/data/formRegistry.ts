@@ -30,13 +30,18 @@ export const TRADEMARK_APPEAL_SIGNATURE: FormSignature = {
   ],
   labelPatterns: [
     'full name',
+    'your name (name and surname)',
     'official organization',
+    'official online presence',
     'facebook page',
+    'email address',
     'contact email',
     'report number',
+    'please explain why you believe that the content should not have been removed',
     'appeal explanation',
     'electronic signature',
     'removed content',
+    'url(s)/description',
   ],
   forbiddenPatterns: [
     'messenger conversation',

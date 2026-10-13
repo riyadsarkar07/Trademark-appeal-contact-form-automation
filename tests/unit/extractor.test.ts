@@ -49,4 +49,47 @@ describe('field extraction and label normalization', () => {
     expect(ids).not.toContain('csrf');
     expect(ids).not.toContain('unrelated');
   });
+
+  it('does not reuse a shared parent container as every child control label', () => {
+    document.body.innerHTML = `
+      <section>
+        <div>
+          <span>Your name (name and surname)</span>
+          <input id="full-name" name="name" />
+        </div>
+        <div>
+          <span>Email address</span>
+          <input id="contact-email" name="email" type="email" />
+        </div>
+        <div>
+          <span>Report number</span>
+          <input id="report-number" name="reportNumber" />
+        </div>
+        <div>
+          <span>Your electronic signature should match your full name.</span>
+          <input id="signature" name="signature" />
+        </div>
+      </section>
+    `;
+    const fields = extractVisibleFields(document);
+    expect(fields.find((item) => item.id === 'full-name')?.label).toMatch(/name and surname/i);
+    expect(fields.find((item) => item.id === 'contact-email')?.label).toMatch(/email address/i);
+    expect(fields.find((item) => item.id === 'report-number')?.label).toMatch(/report number/i);
+    expect(fields.find((item) => item.id === 'signature')?.label).toMatch(/electronic signature/i);
+    expect(fields.find((item) => item.id === 'full-name')?.label).not.toMatch(/electronic signature/i);
+    expect(fields.find((item) => item.id === 'report-number')?.label).not.toMatch(/electronic signature/i);
+    expect(fields.map((item) => item.id)).toEqual([...new Set(fields.map((item) => item.id))]);
+  });
+
+  it('extracts radio buttons separately from checkboxes', () => {
+    document.body.innerHTML = `
+      <form>
+        <label><input id="continue" type="radio" name="continue" /> I understand and wish to continue.</label>
+        <label><input id="missing" type="checkbox" /> I cannot see the content that I wish to appeal</label>
+      </form>
+    `;
+    const fields = extractVisibleFields(document);
+    expect(fields.find((item) => item.id === 'continue')?.kind).toBe('radio');
+    expect(fields.find((item) => item.id === 'missing')?.kind).toBe('checkbox');
+  });
 });

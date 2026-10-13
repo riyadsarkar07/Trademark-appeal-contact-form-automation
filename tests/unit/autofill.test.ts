@@ -112,8 +112,8 @@ describe('autofill safety', () => {
       overwriteExisting: false,
       fillProtectedLegal: false,
     });
-    expect(first.filled + first.skipped + first.failed).toBe(first.results.length);
-    expect(second.filled + second.skipped + second.failed).toBe(second.results.length);
+    expect(first.filled + first.alreadyCorrect + first.skipped + first.failed).toBe(first.results.length);
+    expect(second.filled + second.alreadyCorrect + second.skipped + second.failed).toBe(second.results.length);
     expect(second.filled).toBe(0);
     expect(second.results.filter((item) => item.outcome === 'already-correct').length).toBeGreaterThan(0);
     expect(second.blockedReason).toBeNull();

@@ -62,6 +62,11 @@ describe('screenshot-based label mapping against the local mock form', () => {
       expect(match?.field.label.toLowerCase()).toContain(expectedLabel.toLowerCase().slice(0, 12));
       expect(match?.field.selectorHint.includes(':nth-')).toBe(false);
     }
+    const assignedKeys = matches
+      .filter((item) => item.confidence === 'high' || item.confidence === 'medium')
+      .map((item) => item.semanticKey);
+    expect(assignedKeys).toHaveLength(new Set(assignedKeys).size);
+    expect(matches.filter((item) => item.confidence === 'ambiguous')).toHaveLength(0);
   });
 
   it('fills mapped profile values and leaves protected controls alone', () => {

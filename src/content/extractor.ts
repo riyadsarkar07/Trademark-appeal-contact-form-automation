@@ -10,6 +10,8 @@ const SEARCH_LABEL_PATTERNS = [
   'search the help center',
 ];
 
+const FIELD_GROUP_SELECTOR = 'fieldset, section, .field, .form-field, .form-row, li, p, label';
+
 function isVisible(element: HTMLElement): boolean {
   if (element.hidden || element.getAttribute('aria-hidden') === 'true') {
     return false;
@@ -62,7 +64,10 @@ function kindFromControl(element: HTMLInputElement | HTMLTextAreaElement | HTMLS
   ) {
     return null;
   }
-  if (type === 'checkbox' || type === 'radio') {
+  if (type === 'radio') {
+    return 'radio';
+  }
+  if (type === 'checkbox') {
     return 'checkbox';
   }
   if (type === 'file') {
@@ -77,28 +82,48 @@ function kindFromControl(element: HTMLInputElement | HTMLTextAreaElement | HTMLS
   return 'text';
 }
 
-function labelFor(element: HTMLElement): string {
+function cssEscape(value: string): string {
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+    return CSS.escape(value);
+  }
+  return value.replace(/["\\]/g, '\\$&');
+}
+
+function textWithoutControls(element: HTMLElement): string {
+  const clone = element.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll('input, textarea, select, button').forEach((node) => node.remove());
+  return (clone.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
+function associatedLabelText(element: HTMLElement): string {
   const id = element.id;
   if (id) {
     const byFor = element.ownerDocument.querySelector(`label[for="${cssEscape(id)}"]`);
-    if (byFor?.textContent) {
-      return byFor.textContent.trim();
+    if (byFor instanceof HTMLElement) {
+      const text = textWithoutControls(byFor);
+      if (text) {
+        return text;
+      }
     }
   }
   const wrapping = element.closest('label');
-  if (wrapping) {
-    const clone = wrapping.cloneNode(true) as HTMLElement;
-    clone.querySelectorAll('input, textarea, select, button').forEach((node) => node.remove());
-    const text = clone.textContent?.trim();
-    if (text) {
-      return text;
+  if (wrapping instanceof HTMLElement) {
+    const nestedControls = wrapping.querySelectorAll(CONTROL_SELECTOR);
+    if (nestedControls.length <= 1) {
+      const text = textWithoutControls(wrapping);
+      if (text) {
+        return text;
+      }
     }
   }
   const labelledBy = element.getAttribute('aria-labelledby');
   if (labelledBy) {
     const parts = labelledBy
       .split(/\s+/)
-      .map((ref) => element.ownerDocument.getElementById(ref)?.textContent?.trim() ?? '')
+      .map((ref) => {
+        const node = element.ownerDocument.getElementById(ref);
+        return node instanceof HTMLElement ? textWithoutControls(node) : '';
+      })
       .filter(Boolean);
     if (parts.length > 0) {
       return parts.join(' ');
@@ -108,60 +133,67 @@ function labelFor(element: HTMLElement): string {
   if (aria) {
     return aria.trim();
   }
+  return '';
+}
+
+function describedByText(element: HTMLElement): string {
   const describedBy = element.getAttribute('aria-describedby');
-  if (describedBy) {
-    const desc = element.ownerDocument.getElementById(describedBy)?.textContent?.trim();
-    if (desc) {
-      return desc;
-    }
+  if (!describedBy) {
+    return '';
   }
-  const prev = previousMeaningfulText(element);
-  if (prev) {
-    return prev;
-  }
-  return (element.getAttribute('placeholder') ?? element.getAttribute('name') ?? '').trim();
+  return describedBy
+    .split(/\s+/)
+    .map((ref) => {
+      const node = element.ownerDocument.getElementById(ref);
+      return node instanceof HTMLElement ? textWithoutControls(node) : '';
+    })
+    .filter(Boolean)
+    .join(' ');
 }
 
 function previousMeaningfulText(element: HTMLElement): string {
   let node: ChildNode | null = element.previousSibling;
   while (node) {
     if (node.nodeType === Node.TEXT_NODE) {
-      const text = node.textContent?.trim();
-      if (text) {
+      const text = node.textContent?.replace(/\s+/g, ' ').trim();
+      if (text && text.length < 200) {
         return text;
       }
     }
     if (node instanceof HTMLElement) {
-      const text = node.textContent?.trim();
+      if (node.matches('input, textarea, select, button, label')) {
+        break;
+      }
+      const text = textWithoutControls(node);
       if (text && text.length < 200) {
         return text;
       }
     }
     node = node.previousSibling;
   }
-  const group = element.closest('.field, .form-field, .form-row, li, p, div');
-  if (group && group !== element) {
-    const heading = group.querySelector('label, .label, legend, strong, span');
-    const text = heading?.textContent?.trim();
-    if (text && text !== element.getAttribute('placeholder')) {
-      return text;
-    }
-  }
   return '';
 }
 
-function nearestFieldGroup(element: HTMLElement): HTMLElement | null {
+function nearestExclusiveGroup(element: HTMLElement): HTMLElement | null {
   let current: HTMLElement | null = element.parentElement;
   while (current && current !== element.ownerDocument.body) {
-    if (current.matches('fieldset, section, .field, .form-field, .form-row, li, p, label')) {
-      return current;
-    }
     if (current.tagName === 'FORM' || current.tagName === 'MAIN') {
       return null;
     }
-    if (current.tagName === 'DIV') {
-      const text = (current.textContent ?? '').replace(/\s+/g, ' ').trim();
-      if (text.length > 0 && text.length <= 280) {
+    const controls = current.querySelectorAll(CONTROL_SELECTOR);
+    if (controls.length > 1) {
+      if (current.tagName === 'LABEL' && current.contains(element) && controls[0] === element) {
+        return current;
+      }
+      return null;
+    }
+    if (controls.length === 1 && controls[0] === element) {
+      const caption = textWithoutControls(current);
+      if (
+        caption.length > 0 &&
+        caption.length <= 280 &&
+        (current.matches(FIELD_GROUP_SELECTOR) || current.tagName === 'DIV' || current.tagName === 'SPAN')
+      ) {
         return current;
       }
     }
@@ -170,28 +202,72 @@ function nearestFieldGroup(element: HTMLElement): HTMLElement | null {
   return null;
 }
 
+function groupCaption(group: HTMLElement, element: HTMLElement): string {
+  const legend = group.querySelector('legend, h2, h3, h4, .label');
+  if (legend instanceof HTMLElement && !legend.contains(element)) {
+    const text = textWithoutControls(legend);
+    if (text && text.length < 200) {
+      return text;
+    }
+  }
+  const label = group.querySelector('label');
+  if (label instanceof HTMLElement) {
+    const htmlFor = label.getAttribute('for');
+    if (!htmlFor || htmlFor === element.id) {
+      const text = textWithoutControls(label);
+      if (text && text.length < 200) {
+        return text;
+      }
+    }
+  }
+  const text = textWithoutControls(group);
+  if (text && text.length > 0 && text.length <= 200) {
+    return text;
+  }
+  return '';
+}
+
+function labelFor(element: HTMLElement): string {
+  const associated = associatedLabelText(element);
+  if (associated) {
+    return associated;
+  }
+  const described = describedByText(element);
+  if (described) {
+    return described;
+  }
+  const prev = previousMeaningfulText(element);
+  if (prev) {
+    return prev;
+  }
+  const group = nearestExclusiveGroup(element);
+  if (group) {
+    const caption = groupCaption(group, element);
+    if (caption) {
+      return caption;
+    }
+  }
+  return (element.getAttribute('placeholder') ?? element.getAttribute('name') ?? '').trim();
+}
+
 function surroundingText(element: HTMLElement): string {
-  const group = nearestFieldGroup(element);
   const bits = [
+    associatedLabelText(element),
+    describedByText(element),
     element.getAttribute('placeholder') ?? '',
     element.getAttribute('name') ?? '',
     element.getAttribute('id') ?? '',
+    previousMeaningfulText(element),
   ];
+  const group = nearestExclusiveGroup(element);
   if (group) {
-    bits.push(group.querySelector('legend, h2, h3, h4, label, .label')?.textContent ?? '');
-    const text = (group.textContent ?? '').replace(/\s+/g, ' ').trim();
-    if (text.length > 0 && text.length <= 280) {
-      bits.push(text);
-    }
+    bits.push(groupCaption(group, element));
   }
-  return bits.join(' ').replace(/\s+/g, ' ').trim();
-}
-
-function cssEscape(value: string): string {
-  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
-    return CSS.escape(value);
-  }
-  return value.replace(/["\\]/g, '\\$&');
+  return bits
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function currentValue(element: HTMLInputElement | HTMLTextAreaElement): string {
@@ -221,16 +297,18 @@ export function extractVisibleFields(root: ParentNode): ExtractedField[] {
   >;
   const fields: ExtractedField[] = [];
   const usedIds = new Set<string>();
+  const seenElements = new Set<HTMLElement>();
 
   nodes.forEach((element, index) => {
-    if (!(element instanceof HTMLElement)) {
+    if (!(element instanceof HTMLElement) || seenElements.has(element)) {
       return;
     }
+    seenElements.add(element);
     const kind = kindFromControl(element);
     if (!kind) {
       return;
     }
-    if (!isVisible(element)) {
+    if (!isVisible(element) || Boolean(element.disabled)) {
       return;
     }
     const label = labelFor(element);
@@ -278,14 +356,16 @@ export function findControl(root: ParentNode, field: ExtractedField): HTMLInputE
   if (field.id && !field.id.startsWith('field-')) {
     const byId = scope.querySelector(`#${cssEscape(field.id)}`);
     if (byId instanceof HTMLInputElement || byId instanceof HTMLTextAreaElement) {
-      return byId;
+      if (isVisible(byId) && !byId.disabled) {
+        return byId;
+      }
     }
   }
   if (field.selectorHint.startsWith('#') || field.selectorHint.startsWith('[')) {
     try {
       const hinted = scope.querySelector(field.selectorHint);
       if (hinted instanceof HTMLInputElement || hinted instanceof HTMLTextAreaElement) {
-        if (!hinted.disabled) {
+        if (!hinted.disabled && isVisible(hinted)) {
           return hinted;
         }
       }

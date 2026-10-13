@@ -11,7 +11,7 @@ import type {
 import { findControl } from './extractor';
 
 const NEVER_FILL: SemanticFieldKey[] = ['captcha', 'otp', 'attachment', 'submit', 'unknown'];
-const MANUAL_REVIEW: SemanticFieldKey[] = ['declarationCheckbox', 'contentMissingCheckbox'];
+const MANUAL_REVIEW: SemanticFieldKey[] = ['declarationCheckbox', 'contentMissingCheckbox', 'continuationRadio'];
 
 interface TrackedControl {
   _valueTracker?: { setValue: (value: string) => void };
@@ -91,20 +91,23 @@ export function buildAutofillPlan(matches: FieldMatch[]): FieldMatch[] {
   return matches.filter((match) => match.confidence === 'high' || match.confidence === 'medium');
 }
 
-function tally(results: FieldFillResult[]): Pick<AutofillReport, 'filled' | 'skipped' | 'failed'> {
+function tally(results: FieldFillResult[]): Pick<AutofillReport, 'filled' | 'alreadyCorrect' | 'skipped' | 'failed'> {
   let filled = 0;
+  let alreadyCorrect = 0;
   let skipped = 0;
   let failed = 0;
   for (const result of results) {
     if (result.outcome === 'filled') {
       filled += 1;
+    } else if (result.outcome === 'already-correct') {
+      alreadyCorrect += 1;
     } else if (result.outcome === 'failed') {
       failed += 1;
     } else {
       skipped += 1;
     }
   }
-  return { filled, skipped, failed };
+  return { filled, alreadyCorrect, skipped, failed };
 }
 
 export function applyAutofill(options: {
@@ -142,6 +145,14 @@ function fillOne(
     label: match.field.label,
     semanticKey: match.semanticKey,
   };
+
+  if (match.field.id.startsWith('unavailable:')) {
+    return {
+      ...base,
+      outcome: 'skipped-unsupported',
+      message: match.reason || 'This profile field is not present on the form.',
+    };
+  }
 
   if (NEVER_FILL.includes(match.semanticKey) || policyFor(match.semanticKey) === 'never') {
     return {
@@ -192,11 +203,14 @@ function fillOne(
   }
 
   try {
-    if (match.field.kind === 'checkbox') {
+    if (match.field.kind === 'checkbox' || match.field.kind === 'radio') {
       return {
         ...base,
         outcome: 'skipped-manual',
-        message: 'Checkboxes that confirm legal statements must be selected by the user.',
+        message:
+          match.field.kind === 'radio'
+            ? 'Radio choices such as continuation must be selected by the user.'
+            : 'Checkboxes that confirm legal statements must be selected by the user.',
       };
     }
     const outcome = fillText(control, match.proposedValue ?? '', options.overwriteExisting);

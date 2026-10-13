@@ -22,7 +22,7 @@ declare global {
         previousFingerprint: string | null,
       ) => {
         detection: { status: string };
-        report: { filled: number; skipped: number; blockedReason: string | null };
+        report: { filled: number; alreadyCorrect: number; skipped: number; blockedReason: string | null };
       };
     };
     MockAppeal: {
@@ -32,7 +32,7 @@ declare global {
         matchedCount: number;
       };
       fill: (overwrite?: boolean) => {
-        report: { filled: number; skipped: number; blockedReason: string | null };
+        report: { filled: number; alreadyCorrect: number; skipped: number; blockedReason: string | null };
       };
       showOtp: () => void;
       showCaptcha: () => void;

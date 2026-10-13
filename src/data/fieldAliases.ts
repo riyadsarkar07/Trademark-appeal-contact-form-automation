@@ -7,16 +7,15 @@ export const FIELD_ALIASES: FieldAliasDefinition[] = [
     fillPolicy: 'autofill',
     kinds: ['text'],
     aliases: [
-      'full name',
+      'your name (name and surname)',
+      'your name name and surname',
+      'name and surname',
       'your full name',
-      'name',
+      'first and last name',
       'contact name',
       'legal name',
-      'first and last name',
-      'your name name and surname',
-      'your name (name and surname)',
+      'full name',
       'your name',
-      'name and surname',
     ],
   },
   {
@@ -54,6 +53,7 @@ export const FIELD_ALIASES: FieldAliasDefinition[] = [
       'removed content url',
       'content url',
       'please provide url s description leading to where the content appeared on facebook',
+      'url s description leading to where the content appeared on facebook',
     ],
   },
   {
@@ -121,8 +121,17 @@ export const FIELD_ALIASES: FieldAliasDefinition[] = [
       'i certify',
       'under penalty',
       'good faith',
-      'i understand',
       'i declare that this appeal is submitted in good faith',
+    ],
+  },
+  {
+    semanticKey: 'continuationRadio',
+    fillPolicy: 'manual-review',
+    kinds: ['radio'],
+    aliases: [
+      'i understand and wish to continue',
+      'i understand and wish to continue.',
+      'wish to continue',
     ],
   },
   {
@@ -131,11 +140,14 @@ export const FIELD_ALIASES: FieldAliasDefinition[] = [
     fillPolicy: 'autofill',
     kinds: ['text'],
     aliases: [
+      'your electronic signature should match your full name',
+      'electronic signature should match your full name',
       'electronic signature',
-      'signature',
-      'type your name',
-      'sign here',
       'e-signature',
+      'e signature',
+      'sign here',
+      'type your name',
+      'signature',
     ],
   },
   {
@@ -191,7 +203,10 @@ export function aliasScore(normalizedLabel: string, alias: string): number {
   if (normalizedLabel === normalizedAlias) {
     return 1;
   }
-  if (normalizedLabel.includes(normalizedAlias) || normalizedAlias.includes(normalizedLabel)) {
+  if (normalizedLabel.includes(normalizedAlias)) {
+    return 0.94;
+  }
+  if (normalizedAlias.includes(normalizedLabel) && normalizedLabel.length >= 12) {
     return 0.86;
   }
   const labelTokens = new Set(normalizedLabel.split(' ').filter(Boolean));
@@ -200,5 +215,12 @@ export function aliasScore(normalizedLabel: string, alias: string): number {
     return 0;
   }
   const overlap = aliasTokens.filter((token) => labelTokens.has(token)).length;
-  return overlap / aliasTokens.length;
+  if (overlap === 0) {
+    return 0;
+  }
+  const coverage = overlap / aliasTokens.length;
+  if (coverage < 0.6 || overlap < 2) {
+    return coverage * 0.5;
+  }
+  return coverage;
 }

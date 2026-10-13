@@ -251,7 +251,8 @@ export function App() {
       {report ? (
         <section className="card">
           <strong>
-            Fill results: {report.filled} filled, {report.skipped} skipped, {report.failed} failed
+            Fill results: {report.filled} filled, {report.alreadyCorrect} already correct, {report.skipped} skipped,{' '}
+            {report.failed} failed
           </strong>
           <div className="list">
             {report.results.map((item) => (

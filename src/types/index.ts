@@ -23,12 +23,13 @@ export interface AppealProfile {
   electronicSignature: string;
 }
 
-export type FillableControlKind = 'text' | 'textarea' | 'email' | 'url' | 'checkbox' | 'file';
+export type FillableControlKind = 'text' | 'textarea' | 'email' | 'url' | 'checkbox' | 'radio' | 'file';
 
 export type SemanticFieldKey =
   | ProfileFieldKey
   | 'contentMissingCheckbox'
   | 'declarationCheckbox'
+  | 'continuationRadio'
   | 'attachment'
   | 'captcha'
   | 'otp'
@@ -145,6 +146,7 @@ export interface AutofillRequest {
 
 export interface AutofillReport {
   filled: number;
+  alreadyCorrect: number;
   skipped: number;
   failed: number;
   results: FieldFillResult[];

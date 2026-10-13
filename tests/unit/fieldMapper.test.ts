@@ -76,8 +76,24 @@ describe('alias matching', () => {
 
   it('does not treat a generic name field as an electronic signature', () => {
     const matches = mapFields([field({ id: 'n', label: 'Your name (name and surname)', kind: 'text' })], profile);
-    expect(matches).toHaveLength(1);
-    expect(matches[0]?.semanticKey).toBe('fullName');
-    expect(matches[0]?.semanticKey).not.toBe('electronicSignature');
+    const nameMatch = matches.find((item) => item.field.id === 'n');
+    expect(nameMatch?.semanticKey).toBe('fullName');
+    expect(nameMatch?.semanticKey).not.toBe('electronicSignature');
+    expect(matches.filter((item) => item.semanticKey === 'fullName')).toHaveLength(1);
+  });
+
+  it('reports a missing electronic signature instead of substituting the name field', () => {
+    const matches = mapFields(
+      [
+        field({ id: 'n', label: 'Your name (name and surname)', kind: 'text' }),
+        field({ id: 'r', label: 'Report number', kind: 'text' }),
+      ],
+      profile,
+    );
+    expect(matches.find((item) => item.field.id === 'n')?.semanticKey).toBe('fullName');
+    expect(matches.find((item) => item.field.id === 'r')?.semanticKey).toBe('reportNumber');
+    const signature = matches.find((item) => item.semanticKey === 'electronicSignature');
+    expect(signature?.confidence).toBe('none');
+    expect(signature?.reason).toMatch(/not found/i);
   });
 });

@@ -74,7 +74,7 @@ document.getElementById('preview-detect')?.addEventListener('click', () => {
 document.getElementById('preview-fill')?.addEventListener('click', () => {
   const result = fill(false);
   if (statusNode && result && 'report' in result) {
-    statusNode.textContent = `Filled ${result.report.filled}, skipped ${result.report.skipped}`;
+    statusNode.textContent = `Filled ${result.report.filled}, already correct ${result.report.alreadyCorrect}, skipped ${result.report.skipped}`;
   }
 });
 document.getElementById('preview-otp')?.addEventListener('click', () => window.MockAppeal.showOtp());
