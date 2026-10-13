@@ -13,14 +13,44 @@ const SEARCH_LABEL_PATTERNS = [
 const FIELD_GROUP_SELECTOR = 'fieldset, section, .field, .form-field, .form-row, li, p, label';
 
 function isVisible(element: HTMLElement): boolean {
-  if (element.hidden || element.getAttribute('aria-hidden') === 'true') {
-    return false;
-  }
-  const style = element.ownerDocument.defaultView?.getComputedStyle(element);
-  if (style && (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0')) {
-    return false;
+  const doc = element.ownerDocument;
+  let current: HTMLElement | null = element;
+  while (current && current !== doc.documentElement) {
+    if (current.hidden || current.getAttribute('aria-hidden') === 'true') {
+      return false;
+    }
+    const style = doc.defaultView?.getComputedStyle(current);
+    if (style && (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0')) {
+      return false;
+    }
+    current = current.parentElement;
   }
   return true;
+}
+
+function isCandidateControl(
+  element: Element,
+): element is HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
+  if (!(element instanceof HTMLElement)) {
+    return false;
+  }
+  if (element instanceof HTMLInputElement && element.disabled) {
+    return false;
+  }
+  if (element instanceof HTMLTextAreaElement && element.disabled) {
+    return false;
+  }
+  if (element instanceof HTMLSelectElement && element.disabled) {
+    return false;
+  }
+  if (kindFromControl(element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement) === null) {
+    return false;
+  }
+  return isVisible(element);
+}
+
+function candidateControlsWithin(scope: HTMLElement): HTMLElement[] {
+  return Array.from(scope.querySelectorAll(CONTROL_SELECTOR)).filter(isCandidateControl);
 }
 
 function isHelpSearchControl(element: HTMLElement): boolean {
@@ -108,7 +138,7 @@ function associatedLabelText(element: HTMLElement): string {
   }
   const wrapping = element.closest('label');
   if (wrapping instanceof HTMLElement) {
-    const nestedControls = wrapping.querySelectorAll(CONTROL_SELECTOR);
+    const nestedControls = candidateControlsWithin(wrapping);
     if (nestedControls.length <= 1) {
       const text = textWithoutControls(wrapping);
       if (text) {
@@ -180,7 +210,7 @@ function nearestExclusiveGroup(element: HTMLElement): HTMLElement | null {
     if (current.tagName === 'FORM' || current.tagName === 'MAIN') {
       return null;
     }
-    const controls = current.querySelectorAll(CONTROL_SELECTOR);
+    const controls = candidateControlsWithin(current);
     if (controls.length > 1) {
       if (current.tagName === 'LABEL' && current.contains(element) && controls[0] === element) {
         return current;
