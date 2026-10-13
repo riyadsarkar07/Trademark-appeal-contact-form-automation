@@ -2,6 +2,8 @@ import type { AppealProfile, RuntimeMessage, RuntimeResponse } from '../types';
 import { DEFAULT_SETTINGS, loadSnapshot, saveSettings } from '../storage/profiles';
 import { handleRuntimeMessage, type EngineState } from './engine';
 
+const LISTENER_FLAG = '__metaAppealAutofillListenerBound';
+
 const state: EngineState = {
   extractionEnabled: DEFAULT_SETTINGS.extractionEnabled,
   lastFingerprint: null,
@@ -17,7 +19,11 @@ async function currentProfile(): Promise<AppealProfile | null> {
   return snapshot.profiles.find((item) => item.id === snapshot.settings.activeProfileId) ?? snapshot.profiles[0] ?? null;
 }
 
-chrome.runtime.onMessage.addListener((message: RuntimeMessage, _sender, sendResponse) => {
+function onRuntimeMessage(
+  message: RuntimeMessage,
+  _sender: chrome.runtime.MessageSender,
+  sendResponse: (response: RuntimeResponse) => void,
+): boolean {
   void (async () => {
     try {
       const profile = await currentProfile();
@@ -40,4 +46,10 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, _sender, sendResp
     }
   })();
   return true;
-});
+}
+
+const runtimeWindow = window as Window & { [LISTENER_FLAG]?: boolean };
+if (!runtimeWindow[LISTENER_FLAG]) {
+  runtimeWindow[LISTENER_FLAG] = true;
+  chrome.runtime.onMessage.addListener(onRuntimeMessage);
+}

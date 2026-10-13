@@ -123,12 +123,10 @@ export type FillOutcome =
   | 'filled'
   | 'already-correct'
   | 'skipped-existing-value'
-  | 'skipped-existing'
+  | 'skipped-ambiguous'
+  | 'skipped-unsupported'
   | 'skipped-manual'
-  | 'skipped-uncertain'
-  | 'skipped-duplicate'
   | 'skipped-empty-profile'
-  | 'skipped-protected'
   | 'failed';
 
 export interface FieldFillResult {

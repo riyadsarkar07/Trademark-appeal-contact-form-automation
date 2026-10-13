@@ -34,18 +34,30 @@ function scoreField(field: ExtractedField, definition: FieldAliasDefinition): nu
   if (!definition.kinds.includes(field.kind)) {
     return 0;
   }
-  const fullHaystack = `${field.label} ${field.surroundingText} ${field.name} ${field.id}`;
+  const label = normalizeLabel(field.label);
+  const attrs = normalizeLabel(`${field.name} ${field.id}`);
+  const surround = normalizeLabel(field.surroundingText);
+  const localText = `${label} ${attrs}`.trim();
   if (definition.semanticKey === 'reportNumber') {
-    const text = normalizeLabel(fullHaystack);
-    const hasKeyword = ['report', 'reference', 'case', 'ticket', 'id', 'number', 'rpt'].some((kw) => text.includes(kw));
+    const hasKeyword = ['report', 'reference', 'case', 'ticket', 'rpt'].some((kw) => localText.includes(kw));
     if (!hasKeyword) {
       return 0;
     }
   }
-  const haystack = normalizeLabel(fullHaystack);
+  if (definition.semanticKey === 'electronicSignature') {
+    const hasSignature = ['signature', 'sign here', 'e signature', 'esignature', 'type your name'].some((kw) =>
+      localText.includes(normalizeLabel(kw)),
+    );
+    if (!hasSignature) {
+      return 0;
+    }
+  }
   let best = 0;
   for (const alias of definition.aliases) {
-    best = Math.max(best, aliasScore(haystack, alias));
+    const labelScore = aliasScore(label, alias);
+    const attrScore = aliasScore(attrs, alias) * 0.85;
+    const surroundScore = aliasScore(surround, alias) * 0.4;
+    best = Math.max(best, labelScore, attrScore, surroundScore);
   }
   return best;
 }
@@ -68,14 +80,13 @@ function proposedValue(profile: AppealProfile | null, definition: FieldAliasDefi
 }
 
 export function mapFields(fields: ExtractedField[], profile: AppealProfile | null): FieldMatch[] {
-  const usedKeys = new Map<SemanticFieldKey, number>();
+  const claimed = new Map<SemanticFieldKey, number>();
   const matches: FieldMatch[] = [];
 
   for (const field of fields) {
     const ranked = topAliases(field);
     const first = ranked[0];
     const second = ranked[1];
-    const ambiguous = Boolean(first && second && first.score - second.score < 0.12 && first.score < 0.95);
 
     if (!first) {
       matches.push({
@@ -87,18 +98,51 @@ export function mapFields(fields: ExtractedField[], profile: AppealProfile | nul
       continue;
     }
 
-    const previous = usedKeys.get(first.definition.semanticKey) ?? 0;
-    const duplicate = previous > 0 && first.definition.semanticKey !== 'unknown';
-    usedKeys.set(first.definition.semanticKey, previous + 1);
+    const closeCall = Boolean(
+      second &&
+        first.definition.semanticKey !== second.definition.semanticKey &&
+        first.score - second.score < 0.12 &&
+        first.score < 0.95,
+    );
+    if (closeCall) {
+      matches.push({
+        field,
+        semanticKey: first.definition.semanticKey,
+        confidence: 'ambiguous',
+        reason: `Label matched both ${first.definition.semanticKey} and ${second?.definition.semanticKey}.`,
+        profileKey: first.definition.profileKey,
+        proposedValue: proposedValue(profile, first.definition),
+      });
+      continue;
+    }
 
-    const confidence = duplicate ? 'ambiguous' : confidenceFromScore(first.score, ambiguous);
+    const previousIndex = claimed.get(first.definition.semanticKey);
+    if (previousIndex !== undefined && first.definition.semanticKey !== 'unknown') {
+      const prior = matches[previousIndex];
+      if (prior) {
+        matches[previousIndex] = {
+          ...prior,
+          confidence: 'ambiguous',
+          reason: 'Multiple controls mapped to the same semantic field.',
+        };
+      }
+      matches.push({
+        field,
+        semanticKey: first.definition.semanticKey,
+        confidence: 'ambiguous',
+        reason: 'Multiple controls mapped to the same semantic field.',
+        profileKey: first.definition.profileKey,
+        proposedValue: proposedValue(profile, first.definition),
+      });
+      continue;
+    }
+
+    claimed.set(first.definition.semanticKey, matches.length);
     matches.push({
       field,
       semanticKey: first.definition.semanticKey,
-      confidence,
-      reason: duplicate
-        ? 'Multiple controls mapped to the same semantic field.'
-        : `Matched alias for ${first.definition.semanticKey} (score ${first.score.toFixed(2)}).`,
+      confidence: confidenceFromScore(first.score, false),
+      reason: `Matched alias for ${first.definition.semanticKey} (score ${first.score.toFixed(2)}).`,
       profileKey: first.definition.profileKey,
       proposedValue: proposedValue(profile, first.definition),
     });

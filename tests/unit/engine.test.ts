@@ -72,5 +72,24 @@ describe('engine message handling', () => {
     expect(filled.report?.filled).toBeGreaterThan(0);
     expect((document.getElementById('full-name') as HTMLInputElement).value).toBe('Alex Example');
     expect(state.lastFingerprint).toBeTruthy();
+
+    const retried = handleRuntimeMessage(
+      {
+        type: 'AUTOFILL',
+        payload: {
+          request: { profile, overwriteExisting: false, fillProtectedLegal: false },
+        },
+      },
+      {
+        locationLike: { hostname: 'localhost', pathname: '/' },
+        root: document,
+        state,
+        profile,
+      },
+    );
+    expect(retried.ok).toBe(true);
+    expect(retried.report?.blockedReason).toBeNull();
+    expect(retried.report?.results.some((item) => item.outcome === 'already-correct')).toBe(true);
+    expect((document.getElementById('full-name') as HTMLInputElement).value).toBe('Alex Example');
   });
 });

@@ -150,8 +150,9 @@ export function App() {
 
       <section className="card">
         <div className="row">
-          <label className="toggle">
+          <label className="toggle" htmlFor="extraction-toggle">
             <input
+              id="extraction-toggle"
               type="checkbox"
               checked={settings?.extractionEnabled ?? true}
               onChange={(event) => void toggleExtraction(event.target.checked)}
@@ -163,9 +164,10 @@ export function App() {
             Settings
           </button>
         </div>
-        <label>
+        <label htmlFor="profile-select">
           Saved profile
           <select
+            id="profile-select"
             value={activeProfile?.id ?? ''}
             onChange={(event) => void changeProfile(event.target.value)}
             disabled={profiles.length === 0}
@@ -195,7 +197,9 @@ export function App() {
             <span>Unmatched</span>
           </div>
         </div>
-        <p className="footer-note">{detection?.reason ?? 'Detect the current tab before filling.'}</p>
+        <p className="footer-note">
+          {busy ? 'Working…' : detection?.reason ?? 'Detect the current tab before filling.'}
+        </p>
         <div className="actions">
           <button className="btn primary" type="button" onClick={() => void detectForm()} disabled={busy}>
             <DetectIcon />
@@ -206,8 +210,9 @@ export function App() {
             Auto-Fill
           </button>
         </div>
-        <label className="toggle">
+        <label className="toggle" htmlFor="overwrite-toggle">
           <input
+            id="overwrite-toggle"
             type="checkbox"
             checked={overwriteExisting}
             onChange={(event) => setOverwriteExisting(event.target.checked)}
@@ -252,7 +257,7 @@ export function App() {
             {report.results.map((item) => (
               <div
                 key={item.fieldId}
-                className={`item ${item.outcome === 'filled' ? 'ok' : item.outcome === 'failed' ? 'error' : 'warn'}`}
+                className={`item ${item.outcome === 'filled' || item.outcome === 'already-correct' ? 'ok' : item.outcome === 'failed' ? 'error' : 'warn'}`}
               >
                 {item.label || item.fieldId}: {item.message}
               </div>

@@ -57,7 +57,7 @@ export function runAutofill(
   previousFingerprint: string | null,
 ): { detection: FormDetectionResult; report: AutofillReport } {
   const detection = inspectPage(locationLike, root, true, profile);
-    if (detection.status !== 'supported') {
+  if (detection.status !== 'supported') {
     return {
       detection,
       report: {

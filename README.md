@@ -102,6 +102,12 @@ The content script is limited to Meta help/contact URLs plus `localhost` / `127.
 6. Review declaration checkboxes, attachments, CAPTCHA, and email verification yourself.
 7. Submit the form yourself if it is correct.
 
+The combined removed-content field is stored as `removedContentUrlAndDescription`. Older profiles that used separate URL and description properties are migrated on load and import.
+
+If the popup reports that the content script is missing, open a supported help/contact URL or the local mock form and click Detect again. The popup will try to inject `content.js` once.
+
+Autofill never clicks Send/Submit, never fills CAPTCHA or OTP, and never checks legal declarations.
+
 ## Known limitations
 
 - Real Meta form DOM is not verified in this repository. Detection uses configurable signatures and label aliases rather than unpublished internal selectors.
@@ -109,6 +115,7 @@ The content script is limited to Meta help/contact URLs plus `localhost` / `127.
 - Cross-origin iframes cannot be read or filled. The extension explains that limitation instead of trying to bypass it.
 - Host permissions are limited to help/contact paths. The extension will not run on facebook.com feeds or messenger threads.
 - CAPTCHA, OTP, declaration review, attachments, and final submission remain manual.
+- The unrelated “How can we help?” help-center search box is ignored and is never filled.
 
 ## Safety confirmation
 

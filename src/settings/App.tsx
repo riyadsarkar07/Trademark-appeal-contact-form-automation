@@ -230,20 +230,26 @@ export function App() {
           {error ? <p className="error">{error}</p> : null}
           {message ? <p className="success">{message}</p> : null}
           <div className="form-grid">
-            <label>
+            <label htmlFor="profile-name">
               Profile name
-              <input value={draft.name} onChange={(event) => updateDraft('name', event.target.value)} />
+              <input
+                id="profile-name"
+                value={draft.name}
+                onChange={(event) => updateDraft('name', event.target.value)}
+              />
             </label>
             {FIELD_META.map((field) => (
-              <label key={field.key}>
+              <label key={field.key} htmlFor={`profile-${field.key}`}>
                 {field.label}
                 {field.multiline ? (
                   <textarea
+                    id={`profile-${field.key}`}
                     value={draft[field.key]}
                     onChange={(event) => updateDraft(field.key, event.target.value)}
                   />
                 ) : (
                   <input
+                    id={`profile-${field.key}`}
                     type={field.type ?? 'text'}
                     value={draft[field.key]}
                     onChange={(event) => updateDraft(field.key, event.target.value)}

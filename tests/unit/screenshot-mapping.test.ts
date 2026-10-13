@@ -10,12 +10,14 @@ import type { SemanticFieldKey } from '../../src/types';
 const MOCK_FORM_HTML = readFileSync(resolve(process.cwd(), 'mock/index.html'), 'utf8');
 
 function mountMockForm(): void {
+  const searchStart = MOCK_FORM_HTML.indexOf('<form role="search"');
   const formStart = MOCK_FORM_HTML.indexOf('<form id="appeal-form"');
-  const formEnd = MOCK_FORM_HTML.indexOf('</form>') + '</form>'.length;
+  const start = searchStart >= 0 ? searchStart : formStart;
+  const formEnd = MOCK_FORM_HTML.indexOf('</form>', formStart) + '</form>'.length;
   const otpStart = MOCK_FORM_HTML.indexOf('<section id="otp-dialog"');
   const captchaEnd = MOCK_FORM_HTML.indexOf('</section>', MOCK_FORM_HTML.indexOf('id="captcha-dialog"')) + '</section>'.length;
   document.body.innerHTML =
-    MOCK_FORM_HTML.slice(formStart, formEnd) + MOCK_FORM_HTML.slice(otpStart, captchaEnd);
+    MOCK_FORM_HTML.slice(start, formEnd) + MOCK_FORM_HTML.slice(otpStart, captchaEnd);
 }
 
 const profile = createEmptyProfile({
@@ -39,6 +41,8 @@ describe('screenshot-based label mapping against the local mock form', () => {
   it('identifies required appeal fields from visible labels, not indexes', () => {
     mountMockForm();
     const fields = extractVisibleFields(document);
+    expect(fields.some((item) => /how can we help/i.test(item.label))).toBe(false);
+    expect(fields.some((item) => item.id === 'help-search')).toBe(false);
     const matches = mapFields(fields, profile);
 
     const required: Array<[SemanticFieldKey, string]> = [

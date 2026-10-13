@@ -18,36 +18,45 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   lastFilledFingerprint: null,
 };
 
-export function createEmptyProfile(partial?: Partial<AppealProfile>): AppealProfile {
-  const now = new Date().toISOString();
-  const rawUrlAndDesc = (partial as unknown as Record<string, unknown>)?.removedContentUrlAndDescription;
-  let removedContentUrlAndDescription = '';
-  if (typeof rawUrlAndDesc === 'string') {
-    removedContentUrlAndDescription = rawUrlAndDesc;
-  } else {
-    const oldUrls = typeof (partial as unknown as Record<string, unknown>)?.removedContentUrls === 'string'
-      ? ((partial as unknown as Record<string, unknown>).removedContentUrls as string)
-      : '';
-    const oldDesc = typeof (partial as unknown as Record<string, unknown>)?.removedContentDescription === 'string'
-      ? ((partial as unknown as Record<string, unknown>).removedContentDescription as string)
-      : '';
-    if (oldUrls && oldDesc) {
-      removedContentUrlAndDescription = `${oldUrls}\n${oldDesc}`;
-    } else {
-      removedContentUrlAndDescription = oldUrls || oldDesc || '';
-    }
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+export function migrateRemovedContent(record: Record<string, unknown>): string {
+  const combined = record.removedContentUrlAndDescription;
+  if (typeof combined === 'string' && combined.trim()) {
+    return combined;
   }
+  const oldUrls = typeof record.removedContentUrls === 'string' ? record.removedContentUrls : '';
+  const oldDesc = typeof record.removedContentDescription === 'string' ? record.removedContentDescription : '';
+  if (oldUrls && oldDesc) {
+    return `${oldUrls}\n${oldDesc}`;
+  }
+  if (oldUrls || oldDesc) {
+    return oldUrls || oldDesc;
+  }
+  return typeof combined === 'string' ? combined : '';
+}
+
+function readString(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  return typeof value === 'string' ? value : '';
+}
+
+export function createEmptyProfile(partial?: Partial<AppealProfile> | Record<string, unknown>): AppealProfile {
+  const record = asRecord(partial);
+  const now = new Date().toISOString();
   return {
-    id: partial?.id ?? createId(),
-    name: partial?.name?.trim() || 'Untitled profile',
-    updatedAt: partial?.updatedAt ?? now,
-    fullName: partial?.fullName ?? '',
-    organizationOrPageUrl: partial?.organizationOrPageUrl ?? '',
-    removedContentUrlAndDescription,
-    contactEmail: partial?.contactEmail ?? '',
-    reportNumber: partial?.reportNumber ?? '',
-    appealExplanation: partial?.appealExplanation ?? '',
-    electronicSignature: partial?.electronicSignature ?? '',
+    id: readString(record, 'id') || createId(),
+    name: readString(record, 'name').trim() || 'Untitled profile',
+    updatedAt: readString(record, 'updatedAt') || now,
+    fullName: readString(record, 'fullName'),
+    organizationOrPageUrl: readString(record, 'organizationOrPageUrl'),
+    removedContentUrlAndDescription: migrateRemovedContent(record),
+    contactEmail: readString(record, 'contactEmail'),
+    reportNumber: readString(record, 'reportNumber'),
+    appealExplanation: readString(record, 'appealExplanation'),
+    electronicSignature: readString(record, 'electronicSignature'),
   };
 }
 
@@ -186,16 +195,22 @@ export function parseImportedProfiles(raw: string): AppealProfile[] {
       throw new Error('Each profile must be an object.');
     }
     const record = item as unknown as Record<string, unknown>;
-    const next = createEmptyProfile({
+    const imported = createEmptyProfile({
+      ...record,
       id: typeof record.id === 'string' ? record.id : createId(),
       name: typeof record.name === 'string' ? record.name : 'Imported profile',
       updatedAt: typeof record.updatedAt === 'string' ? record.updatedAt : new Date().toISOString(),
     });
     for (const key of PROFILE_FIELDS) {
+      if (key === 'removedContentUrlAndDescription') {
+        continue;
+      }
       const value = record[key];
-      next[key] = typeof value === 'string' ? value : '';
+      if (typeof value === 'string') {
+        imported[key] = value;
+      }
     }
-    return next;
+    return imported;
   });
 }
 

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   createEmptyProfile,
+  loadSnapshot,
   parseImportedProfiles,
+  saveProfiles,
   serializeProfiles,
   validateProfile,
 } from '../../src/storage/profiles';
@@ -47,5 +49,40 @@ describe('profile storage and validation', () => {
 
   it('rejects malformed import payloads', () => {
     expect(() => parseImportedProfiles('{"hello":1}')).toThrow(/profiles array/i);
+  });
+
+  it('persists profiles across save and reload using local storage fallback', async () => {
+    localStorage.clear();
+    const profile = createEmptyProfile({
+      name: 'Persist me',
+      fullName: 'Alex Example',
+      removedContentUrlAndDescription: 'https://example.com/removed\nTaken down by mistake',
+    });
+    await saveProfiles([profile]);
+    const snapshot = await loadSnapshot();
+    expect(snapshot.profiles).toHaveLength(1);
+    expect(snapshot.profiles[0]?.name).toBe('Persist me');
+    expect(snapshot.profiles[0]?.removedContentUrlAndDescription).toContain('https://example.com/removed');
+    expect(snapshot.profiles[0]?.fullName).toBe('Alex Example');
+  });
+
+  it('preserves legacy removed-content fields during JSON import', () => {
+    const imported = parseImportedProfiles(
+      JSON.stringify({
+        version: 1,
+        profiles: [
+          {
+            id: 'legacy-1',
+            name: 'Legacy import',
+            removedContentUrls: 'https://facebook.com/removed',
+            removedContentDescription: 'Photo that was taken down',
+            fullName: 'Alex Example',
+          },
+        ],
+      }),
+    );
+    expect(imported[0]?.removedContentUrlAndDescription).toContain('https://facebook.com/removed');
+    expect(imported[0]?.removedContentUrlAndDescription).toContain('Photo that was taken down');
+    expect(imported[0]?.fullName).toBe('Alex Example');
   });
 });

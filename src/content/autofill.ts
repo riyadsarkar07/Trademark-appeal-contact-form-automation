@@ -13,18 +13,40 @@ import { findControl } from './extractor';
 const NEVER_FILL: SemanticFieldKey[] = ['captcha', 'otp', 'attachment', 'submit', 'unknown'];
 const MANUAL_REVIEW: SemanticFieldKey[] = ['declarationCheckbox', 'contentMissingCheckbox'];
 
+interface TrackedControl {
+  _valueTracker?: { setValue: (value: string) => void };
+}
+
 function policyFor(key: SemanticFieldKey): 'autofill' | 'manual-review' | 'never' {
   return FIELD_ALIASES.find((item) => item.semanticKey === key)?.fillPolicy ?? 'never';
 }
 
 function dispatchInputEvents(element: HTMLInputElement | HTMLTextAreaElement): void {
-  element.dispatchEvent(new Event('input', { bubbles: true }));
+  element.dispatchEvent(new Event('focus', { bubbles: true }));
+  try {
+    element.dispatchEvent(
+      new InputEvent('input', {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        inputType: 'insertText',
+        data: element.value,
+      }),
+    );
+  } catch {
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  }
   element.dispatchEvent(new Event('change', { bubbles: true }));
+  element.dispatchEvent(new Event('blur', { bubbles: true }));
 }
 
 function nativeSetValue(element: HTMLInputElement | HTMLTextAreaElement, value: string): void {
   const proto = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
   const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
+  const tracker = (element as HTMLInputElement & TrackedControl)._valueTracker;
+  if (tracker && typeof tracker.setValue === 'function') {
+    tracker.setValue('');
+  }
   if (descriptor?.set) {
     descriptor.set.call(element, value);
   } else {
@@ -32,26 +54,57 @@ function nativeSetValue(element: HTMLInputElement | HTMLTextAreaElement, value: 
   }
 }
 
+function valuesMatch(current: string, proposed: string): boolean {
+  return current.trim() === proposed.trim();
+}
+
 function fillText(
   element: HTMLInputElement | HTMLTextAreaElement,
   value: string,
   overwriteExisting: boolean,
 ): FillOutcome {
-  const current = element.value.trim();
-  const proposed = (value ?? '').trim();
-  if (current && current === proposed) {
+  const current = element.value;
+  const proposed = value ?? '';
+  if (valuesMatch(current, proposed) && proposed.trim()) {
     return 'already-correct';
   }
-  if (current && !overwriteExisting) {
-    return 'skipped-existing';
+  if (current.trim() && !overwriteExisting) {
+    return 'skipped-existing-value';
   }
-  nativeSetValue(element, value);
-  dispatchInputEvents(element);
+
+  const attempt = (): void => {
+    nativeSetValue(element, proposed);
+    dispatchInputEvents(element);
+  };
+
+  attempt();
+  if (!valuesMatch(element.value, proposed)) {
+    attempt();
+  }
+  if (!valuesMatch(element.value, proposed)) {
+    throw new Error('Fill verification failed: the control did not keep the profile value.');
+  }
   return 'filled';
 }
 
 export function buildAutofillPlan(matches: FieldMatch[]): FieldMatch[] {
   return matches.filter((match) => match.confidence === 'high' || match.confidence === 'medium');
+}
+
+function tally(results: FieldFillResult[]): Pick<AutofillReport, 'filled' | 'skipped' | 'failed'> {
+  let filled = 0;
+  let skipped = 0;
+  let failed = 0;
+  for (const result of results) {
+    if (result.outcome === 'filled') {
+      filled += 1;
+    } else if (result.outcome === 'failed') {
+      failed += 1;
+    } else {
+      skipped += 1;
+    }
+  }
+  return { filled, skipped, failed };
 }
 
 export function applyAutofill(options: {
@@ -62,33 +115,14 @@ export function applyAutofill(options: {
   fillProtectedLegal: boolean;
   previousFingerprint?: string | null;
 }): AutofillReport {
+  void options.previousFingerprint;
   const confident = buildAutofillPlan(options.matches);
   const fieldIds = confident.map((item) => item.field.id);
   const fingerprint = fingerprintFill(options.profile.id, fieldIds);
-
-  const results: FieldFillResult[] = [];
-  let filled = 0;
-  let skipped = 0;
-  let failed = 0;
-
-  const consider = options.matches;
-
-  for (const match of consider) {
-    const result = fillOne(options.root, match, options);
-    results.push(result);
-    if (result.outcome === 'filled') {
-      filled += 1;
-    } else if (result.outcome === 'failed') {
-      failed += 1;
-    } else {
-      skipped += 1;
-    }
-  }
+  const results = options.matches.map((match) => fillOne(options.root, match, options));
 
   return {
-    filled,
-    skipped,
-    failed,
+    ...tally(results),
     results,
     blockedReason: null,
     fingerprint,
@@ -112,15 +146,23 @@ function fillOne(
   if (NEVER_FILL.includes(match.semanticKey) || policyFor(match.semanticKey) === 'never') {
     return {
       ...base,
-      outcome: 'skipped-protected',
+      outcome: 'skipped-unsupported',
       message: 'This control is protected and will never be filled automatically.',
     };
   }
 
-  if (match.confidence === 'ambiguous' || match.confidence === 'low' || match.confidence === 'none') {
+  if (match.confidence === 'ambiguous') {
     return {
       ...base,
-      outcome: 'skipped-uncertain',
+      outcome: 'skipped-ambiguous',
+      message: 'Field mapping was ambiguous, so it was left unchanged.',
+    };
+  }
+
+  if (match.confidence === 'low' || match.confidence === 'none') {
+    return {
+      ...base,
+      outcome: 'skipped-ambiguous',
       message: 'Field was not matched with enough confidence.',
     };
   }
@@ -161,7 +203,7 @@ function fillOne(
     let message = 'Filled from the selected profile.';
     if (outcome === 'already-correct') {
       message = 'Field already contains the correct profile value.';
-    } else if (outcome === 'skipped-existing') {
+    } else if (outcome === 'skipped-existing-value') {
       message = 'Existing value was preserved (overwrite is disabled).';
     }
     return {
@@ -179,11 +221,11 @@ function fillOne(
 }
 
 export function neverActivateSubmit(root: ParentNode): boolean {
-  const buttons = Array.from((root as Document | Element).querySelectorAll('button, input[type="submit"], input[type="button"]'));
+  const buttons = Array.from(
+    (root as Document | Element).querySelectorAll('button, input[type="submit"], input[type="button"]'),
+  );
   return buttons.every((button) => {
     const el = button as HTMLButtonElement | HTMLInputElement;
     return !el.dataset.metaAppealClicked;
   });
 }
-
-

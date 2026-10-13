@@ -3,18 +3,44 @@ import type { ExtractedField, FillableControlKind } from '../types';
 
 const CONTROL_SELECTOR = 'input, textarea, select';
 
+const SEARCH_LABEL_PATTERNS = [
+  'how can we help',
+  'search help',
+  'search for help',
+  'search the help center',
+];
+
 function isVisible(element: HTMLElement): boolean {
   if (element.hidden || element.getAttribute('aria-hidden') === 'true') {
     return false;
   }
   const style = element.ownerDocument.defaultView?.getComputedStyle(element);
-  if (!style) {
-    return true;
-  }
-  if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+  if (style && (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0')) {
     return false;
   }
   return true;
+}
+
+function isHelpSearchControl(element: HTMLElement): boolean {
+  if (element instanceof HTMLInputElement && element.type.toLowerCase() === 'search') {
+    return true;
+  }
+  if (element.closest('[role="search"]')) {
+    return true;
+  }
+  const haystack = normalizeLabel(
+    [
+      element.getAttribute('placeholder') ?? '',
+      element.getAttribute('aria-label') ?? '',
+      element.getAttribute('name') ?? '',
+      element.getAttribute('id') ?? '',
+      element.getAttribute('role') ?? '',
+    ].join(' '),
+  );
+  if (haystack === 'search' || haystack.includes('search help') || haystack.includes('search for help')) {
+    return true;
+  }
+  return SEARCH_LABEL_PATTERNS.some((pattern) => haystack.includes(pattern));
 }
 
 function kindFromControl(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): FillableControlKind | null {
@@ -25,7 +51,15 @@ function kindFromControl(element: HTMLInputElement | HTMLTextAreaElement | HTMLS
     return null;
   }
   const type = (element.type || 'text').toLowerCase();
-  if (type === 'hidden' || type === 'submit' || type === 'button' || type === 'reset' || type === 'image' || type === 'password') {
+  if (
+    type === 'hidden' ||
+    type === 'submit' ||
+    type === 'button' ||
+    type === 'reset' ||
+    type === 'image' ||
+    type === 'password' ||
+    type === 'search'
+  ) {
     return null;
   }
   if (type === 'checkbox' || type === 'radio') {
@@ -116,15 +150,40 @@ function previousMeaningfulText(element: HTMLElement): string {
   return '';
 }
 
+function nearestFieldGroup(element: HTMLElement): HTMLElement | null {
+  let current: HTMLElement | null = element.parentElement;
+  while (current && current !== element.ownerDocument.body) {
+    if (current.matches('fieldset, section, .field, .form-field, .form-row, li, p, label')) {
+      return current;
+    }
+    if (current.tagName === 'FORM' || current.tagName === 'MAIN') {
+      return null;
+    }
+    if (current.tagName === 'DIV') {
+      const text = (current.textContent ?? '').replace(/\s+/g, ' ').trim();
+      if (text.length > 0 && text.length <= 280) {
+        return current;
+      }
+    }
+    current = current.parentElement;
+  }
+  return null;
+}
+
 function surroundingText(element: HTMLElement): string {
-  const group = element.closest('fieldset, section, form, .field, .form-field, li, div');
+  const group = nearestFieldGroup(element);
   const bits = [
     element.getAttribute('placeholder') ?? '',
     element.getAttribute('name') ?? '',
     element.getAttribute('id') ?? '',
-    group?.querySelector('legend, h2, h3, h4')?.textContent ?? '',
-    group?.textContent?.slice(0, 240) ?? '',
   ];
+  if (group) {
+    bits.push(group.querySelector('legend, h2, h3, h4, label, .label')?.textContent ?? '');
+    const text = (group.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (text.length > 0 && text.length <= 280) {
+      bits.push(text);
+    }
+  }
   return bits.join(' ').replace(/\s+/g, ' ').trim();
 }
 
@@ -147,13 +206,13 @@ function currentValue(element: HTMLInputElement | HTMLTextAreaElement): string {
 
 function selectorHint(element: HTMLElement, index: number): string {
   if (element.id) {
-    return `#${element.id}`;
+    return `#${cssEscape(element.id)}`;
   }
   const name = element.getAttribute('name');
   if (name) {
-    return `[name="${name}"]`;
+    return `[name="${cssEscape(name)}"]`;
   }
-  return `${element.tagName.toLowerCase()}:nth-of-type-like(${index})`;
+  return `${element.tagName.toLowerCase()}[data-meta-appeal-index="${index}"]`;
 }
 
 export function extractVisibleFields(root: ParentNode): ExtractedField[] {
@@ -161,6 +220,7 @@ export function extractVisibleFields(root: ParentNode): ExtractedField[] {
     HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
   >;
   const fields: ExtractedField[] = [];
+  const usedIds = new Set<string>();
 
   nodes.forEach((element, index) => {
     if (!(element instanceof HTMLElement)) {
@@ -176,6 +236,7 @@ export function extractVisibleFields(root: ParentNode): ExtractedField[] {
     const label = labelFor(element);
     const normalized = normalizeLabel(label);
     if (
+      isHelpSearchControl(element) ||
       normalized.includes('how can we help') ||
       normalized === 'search' ||
       normalized.includes('search help') ||
@@ -184,8 +245,13 @@ export function extractVisibleFields(root: ParentNode): ExtractedField[] {
       return;
     }
     const input = element as HTMLInputElement | HTMLTextAreaElement;
+    let id = element.id || element.getAttribute('name') || `field-${index}`;
+    if (usedIds.has(id)) {
+      id = `${id}-${index}`;
+    }
+    usedIds.add(id);
     fields.push({
-      id: element.id || element.getAttribute('name') || `field-${index}`,
+      id,
       label,
       normalizedLabel: normalizeLabel(label),
       name: element.getAttribute('name') ?? '',
@@ -195,9 +261,10 @@ export function extractVisibleFields(root: ParentNode): ExtractedField[] {
       disabled: Boolean(element.disabled),
       visible: true,
       currentValue: currentValue(input),
-      checked: element instanceof HTMLInputElement && (element.type === 'checkbox' || element.type === 'radio')
-        ? element.checked
-        : null,
+      checked:
+        element instanceof HTMLInputElement && (element.type === 'checkbox' || element.type === 'radio')
+          ? element.checked
+          : null,
       surroundingText: surroundingText(element),
       selectorHint: selectorHint(element, index),
     });
@@ -208,16 +275,32 @@ export function extractVisibleFields(root: ParentNode): ExtractedField[] {
 
 export function findControl(root: ParentNode, field: ExtractedField): HTMLInputElement | HTMLTextAreaElement | null {
   const scope = root as Document | Element;
-  if (field.id) {
+  if (field.id && !field.id.startsWith('field-')) {
     const byId = scope.querySelector(`#${cssEscape(field.id)}`);
     if (byId instanceof HTMLInputElement || byId instanceof HTMLTextAreaElement) {
       return byId;
     }
   }
+  if (field.selectorHint.startsWith('#') || field.selectorHint.startsWith('[')) {
+    try {
+      const hinted = scope.querySelector(field.selectorHint);
+      if (hinted instanceof HTMLInputElement || hinted instanceof HTMLTextAreaElement) {
+        if (!hinted.disabled) {
+          return hinted;
+        }
+      }
+    } catch {
+      // Invalid selector hints are ignored in favor of name/label fallback.
+    }
+  }
   if (field.name) {
-    const byName = scope.querySelector(`[name="${cssEscape(field.name)}"]`);
-    if (byName instanceof HTMLInputElement || byName instanceof HTMLTextAreaElement) {
-      return byName;
+    const named = Array.from(scope.querySelectorAll(`[name="${cssEscape(field.name)}"]`)).filter(
+      (node): node is HTMLInputElement | HTMLTextAreaElement =>
+        node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement,
+    );
+    const visibleNamed = named.find((candidate) => isVisible(candidate) && !candidate.disabled);
+    if (visibleNamed) {
+      return visibleNamed;
     }
   }
   const candidates = Array.from(scope.querySelectorAll(CONTROL_SELECTOR)) as Array<
@@ -225,8 +308,11 @@ export function findControl(root: ParentNode, field: ExtractedField): HTMLInputE
   >;
   return (
     candidates.find((candidate) => {
+      if (candidate.disabled || !isVisible(candidate)) {
+        return false;
+      }
       const label = labelFor(candidate);
-      return normalizeLabel(label) === field.normalizedLabel && !candidate.disabled;
+      return normalizeLabel(label) === field.normalizedLabel;
     }) ?? null
   );
 }

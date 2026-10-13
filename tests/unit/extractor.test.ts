@@ -28,4 +28,25 @@ describe('field extraction and label normalization', () => {
     expect(normalizeLabel('URL(s) and description:')).toBe('urls and description');
     expect(normalizeLabel('  Full   Name* ')).toBe('full name');
   });
+
+  it('excludes the How can we help search box and hidden inputs', () => {
+    document.body.innerHTML = `
+      <form role="search">
+        <label for="help-search">How can we help?</label>
+        <input id="help-search" name="q" type="search" placeholder="Search help" />
+      </form>
+      <form>
+        <label for="full-name">Full name</label>
+        <input id="full-name" name="fullName" />
+        <input type="hidden" id="csrf" name="csrf" value="secret" />
+        <input id="unrelated" type="text" style="display:none" aria-label="Hidden leftover" />
+      </form>
+    `;
+    const fields = extractVisibleFields(document);
+    const ids = fields.map((item) => item.id);
+    expect(ids).toContain('full-name');
+    expect(ids).not.toContain('help-search');
+    expect(ids).not.toContain('csrf');
+    expect(ids).not.toContain('unrelated');
+  });
 });

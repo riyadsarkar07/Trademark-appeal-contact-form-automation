@@ -54,7 +54,7 @@ describe('autofill safety', () => {
     expect((document.getElementById('full-name') as HTMLInputElement).value).toBe('Alex Example');
     expect((document.getElementById('email') as HTMLInputElement).value).toBe('keep-me@example.com');
     expect(events).toEqual(expect.arrayContaining(['input', 'change']));
-    expect(report.results.find((item) => item.fieldId === 'email')?.outcome).toBe('skipped-existing');
+    expect(report.results.find((item) => item.fieldId === 'email')?.outcome).toBe('skipped-existing-value');
   });
 
   it('never fills CAPTCHA, OTP, attachments, or declaration checkboxes', () => {
@@ -93,6 +93,47 @@ describe('autofill safety', () => {
       fillProtectedLegal: false,
     });
     expect(second.results.some((item) => item.outcome === 'already-correct')).toBe(true);
+  });
+
+  it('reports accurate filled, skipped, and failed counts after a retry', () => {
+    setupForm();
+    const matches = mapFields(extractVisibleFields(document), profile);
+    const first = applyAutofill({
+      root: document,
+      matches,
+      profile,
+      overwriteExisting: true,
+      fillProtectedLegal: false,
+    });
+    const second = applyAutofill({
+      root: document,
+      matches,
+      profile,
+      overwriteExisting: false,
+      fillProtectedLegal: false,
+    });
+    expect(first.filled + first.skipped + first.failed).toBe(first.results.length);
+    expect(second.filled + second.skipped + second.failed).toBe(second.results.length);
+    expect(second.filled).toBe(0);
+    expect(second.results.filter((item) => item.outcome === 'already-correct').length).toBeGreaterThan(0);
+    expect(second.blockedReason).toBeNull();
+  });
+
+  it('re-queries the live DOM after a node is replaced and still fills', () => {
+    setupForm();
+    const original = document.getElementById('full-name') as HTMLInputElement;
+    const replacement = original.cloneNode(true) as HTMLInputElement;
+    original.replaceWith(replacement);
+    const matches = mapFields(extractVisibleFields(document), profile);
+    const report = applyAutofill({
+      root: document,
+      matches,
+      profile,
+      overwriteExisting: true,
+      fillProtectedLegal: false,
+    });
+    expect(report.results.find((item) => item.fieldId === 'full-name')?.outcome).toBe('filled');
+    expect((document.getElementById('full-name') as HTMLInputElement).value).toBe('Alex Example');
   });
 
   it('never activates the final submission button', () => {

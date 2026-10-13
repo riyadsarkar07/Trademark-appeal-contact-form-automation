@@ -58,4 +58,26 @@ describe('alias matching', () => {
     expect(matches[0]?.semanticKey).toBe('unknown');
     expect(matches[0]?.confidence).toBe('none');
   });
+
+  it('maps report number and electronic signature only when those labels exist', () => {
+    const matches = mapFields(
+      [
+        field({ id: 'n', label: 'Your name (name and surname)', kind: 'text' }),
+        field({ id: 'r', label: 'Report number', kind: 'text' }),
+        field({ id: 's', label: 'Electronic signature', kind: 'text' }),
+      ],
+      profile,
+    );
+    expect(matches.find((item) => item.field.id === 'n')?.semanticKey).toBe('fullName');
+    expect(matches.find((item) => item.field.id === 'r')?.semanticKey).toBe('reportNumber');
+    expect(matches.find((item) => item.field.id === 's')?.semanticKey).toBe('electronicSignature');
+    expect(matches.every((item) => item.confidence === 'high' || item.confidence === 'medium')).toBe(true);
+  });
+
+  it('does not treat a generic name field as an electronic signature', () => {
+    const matches = mapFields([field({ id: 'n', label: 'Your name (name and surname)', kind: 'text' })], profile);
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.semanticKey).toBe('fullName');
+    expect(matches[0]?.semanticKey).not.toBe('electronicSignature');
+  });
 });

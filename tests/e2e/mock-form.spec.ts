@@ -24,6 +24,13 @@ test.describe('local mock trademark appeal form', () => {
     await expect(page.locator('#declaration')).not.toBeChecked();
     await expect(page.locator('#content-missing')).not.toBeChecked();
     expect(await page.evaluate(() => window.__appealSubmitted)).toBeFalsy();
+    expect(await page.locator('#help-search').inputValue()).toBe('');
+
+    const retry = await page.evaluate(() => window.MockAppeal.fill(false));
+    expect(retry.report.blockedReason).toBeNull();
+    expect(retry.report.filled + retry.report.skipped).toBeGreaterThan(0);
+    await expect(page.locator('#full-name')).toHaveValue('Alex Example');
+    expect(await page.evaluate(() => window.__appealSubmitted)).toBeFalsy();
   });
 
   test('does not fill OTP or CAPTCHA when those dialogs are shown', async ({ page }) => {
@@ -35,6 +42,22 @@ test.describe('local mock trademark appeal form', () => {
     await page.evaluate(() => window.MockAppeal.fill(true));
     await expect(page.locator('#otp-code')).toHaveValue('');
     await expect(page.locator('#captcha-box')).not.toBeChecked();
+  });
+
+  test('ignores the help search box and does not submit after reload', async ({ page }) => {
+    await page.goto('/index.html');
+    await page.evaluate(() => window.MockAppeal.fill(false));
+    await expect(page.locator('#help-search')).toHaveValue('');
+    await expect(page.locator('#full-name')).toHaveValue('Alex Example');
+
+    await page.reload();
+    await expect(page.locator('#full-name')).toHaveValue('');
+    const afterReload = await page.evaluate(() => window.MockAppeal.fill(false));
+    expect(afterReload.report.blockedReason).toBeNull();
+    await expect(page.locator('#full-name')).toHaveValue('Alex Example');
+    await expect(page.locator('#help-search')).toHaveValue('');
+    await expect(page.locator('#declaration')).not.toBeChecked();
+    expect(await page.evaluate(() => window.__appealSubmitted)).toBeFalsy();
   });
 
   test('does not treat an ordinary page as a supported form', async ({ page }) => {
