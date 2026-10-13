@@ -1,0 +1,59 @@
+{
+  "manifest_version": 3,
+  "name": "Meta Appeal AutoFill",
+  "short_name": "Appeal AutoFill",
+  "version": "1.0.0",
+  "description": "Detects supported Meta trademark appeal contact forms and fills matched fields from a local profile. Never submits, never solves CAPTCHA, never enters OTPs.",
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "Meta Appeal AutoFill",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_page": "settings.html",
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.facebook.com/help/contact*",
+        "https://facebook.com/help/contact*",
+        "https://m.facebook.com/help/contact*",
+        "https://business.facebook.com/help/contact*",
+        "https://www.instagram.com/help/contact*",
+        "https://instagram.com/help/contact*",
+        "https://help.instagram.com/contact*",
+        "https://www.meta.com/help/contact*",
+        "https://meta.com/help/contact*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": [
+    "https://www.facebook.com/help/contact*",
+    "https://facebook.com/help/contact*",
+    "https://m.facebook.com/help/contact*",
+    "https://business.facebook.com/help/contact*",
+    "https://www.instagram.com/help/contact*",
+    "https://instagram.com/help/contact*",
+    "https://help.instagram.com/contact*",
+    "https://www.meta.com/help/contact*",
+    "https://meta.com/help/contact*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

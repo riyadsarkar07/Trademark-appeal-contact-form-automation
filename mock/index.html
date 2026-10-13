@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Trademark Appeal Contact Form (Local Mock)</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="preview-bar">
+      <strong>Local mock</strong>
+      <button type="button" id="preview-detect">Detect form</button>
+      <button type="button" id="preview-fill">Auto-Fill sample</button>
+      <button type="button" id="preview-otp">Show email verification</button>
+      <button type="button" id="preview-captcha">Show security check</button>
+      <span id="preview-status">Engine ready after scripts load.</span>
+    </div>
+    <main class="sheet">
+      <header>
+        <p class="kicker">Local mock for extension testing</p>
+        <h1>Trademark Appeal Contact Form</h1>
+        <p>
+          This page resembles a Meta intellectual-property appeal contact form for local testing. It is not an official
+          Meta page and does not send data anywhere.
+        </p>
+      </header>
+
+      <form id="appeal-form" novalidate>
+        <section>
+          <h2>Contact Information</h2>
+          <div class="field">
+            <label for="full-name">Your name (name and surname)</label>
+            <input id="full-name" name="fullName" type="text" autocomplete="name" />
+          </div>
+          <div class="field">
+            <label for="org-url">Please provide a link to your organisation's or client's official online presence. (E.g. a website, Facebook Page etc.)</label>
+            <input id="org-url" name="organizationUrl" type="url" />
+          </div>
+          <div class="field">
+            <label for="removed-content">Please provide URL(s)/description leading to where the content appeared on Facebook.</label>
+            <textarea id="removed-content" name="removedContentUrlAndDescription"></textarea>
+          </div>
+          <div class="field">
+            <label for="contact-email">Email address</label>
+            <input id="contact-email" name="contactEmail" type="email" autocomplete="email" />
+          </div>
+        </section>
+
+        <section>
+          <h2>Reported Content At Issue</h2>
+          <div class="field">
+            <label for="report-number">Report number</label>
+            <input id="report-number" name="reportNumber" type="text" />
+          </div>
+          <div class="field checkbox">
+            <input id="content-missing" name="contentMissing" type="checkbox" />
+            <label for="content-missing">I cannot see the content that I wish to appeal, or some of the content is missing</label>
+          </div>
+          <div class="field">
+            <label for="appeal-explanation">Please explain why you believe that the content should not have been removed.</label>
+            <textarea id="appeal-explanation" name="appealExplanation"></textarea>
+          </div>
+        </section>
+
+        <section>
+          <h2>Optional attachment</h2>
+          <div class="field">
+            <label for="attachment">Supporting document</label>
+            <input id="attachment" name="attachment" type="file" />
+            <p class="hint">Select a file yourself. The extension will not upload or transmit files.</p>
+          </div>
+        </section>
+
+        <section>
+          <h2>Declaration and electronic signature</h2>
+          <div class="field checkbox">
+            <input id="declaration" name="declaration" type="checkbox" />
+            <label for="declaration">I declare that this appeal is submitted in good faith</label>
+          </div>
+          <div class="field">
+            <label for="signature">Electronic signature</label>
+            <input id="signature" name="electronicSignature" type="text" />
+          </div>
+        </section>
+
+        <div class="actions">
+          <button id="send-appeal" type="submit">Send</button>
+        </div>
+      </form>
+
+      <section id="otp-dialog" class="dialog hidden" data-testid="otp-dialog">
+        <h2>Email verification</h2>
+        <p>Enter the code we sent to your email.</p>
+        <label for="otp-code">Verification code</label>
+        <input id="otp-code" name="otp" type="text" />
+      </section>
+
+      <section id="captcha-dialog" class="dialog hidden" data-testid="captcha-dialog">
+        <h2>Security Check</h2>
+        <p>reCAPTCHA challenge. Complete this manually.</p>
+        <label>
+          <input id="captcha-box" type="checkbox" />
+          I'm not a robot
+        </label>
+      </section>
+    </main>
+    <script src="./engine/engine.js"></script>
+    <script src="./preview.js"></script>
+  </body>
+</html>
